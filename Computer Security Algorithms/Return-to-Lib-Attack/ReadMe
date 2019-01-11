@@ -1,0 +1,52 @@
+Steps to perform buffer overflow attack using return-to-libc:
+
+i. We first write a vulnerable code in C as follows:(filename is vulnerable.c)
+
+The program first reads an input then passes this input to another buffer in the function vuln(). The original input can have any length, but the buffer in vuln() has only 7 bytes long. Because strcpy() does not check boundaries, buffer overflow will occur.
+
+
+ii. Because the VM uses address randomization, the address at which the string "/bin/sh" is stored, as well as the locations of the system and exit functions, will vary even on different executions of the same program. To be able to carry out the attack, we need to have the same address for each execution. Thus we have to disable the randomization of address using the following command:
+
+sudo sysctl -w kernel.randomize_va_space=0
+
+Execution of this command asks for a password which is "dees"
+
+
+iii. Since linux doesn't allow stack smashing ideally, we have to disable it to perform our attack. As a result, we compile the above code using the following command:
+
+gcc -g -fno-stack-protector vulnerable.c vulnerable
+
+
+iv. We then open the compiled file using the gdb command as follows:
+
+gdb ./vulnerable
+
+
+v. Now we want to check when is the buffer overflowing and to check this we insert some values into the buffer which we can identify (We put 'A' whose ACII value is 41) using following command.
+
+run $(python -c "print('A'*23)")
+We randomly guess the  number of A's until segmentation Fault occurs. We can then know the value where the buffer overflows
+ This also gives us the variable space. This is an important step as here we overwrite the EIP (Extended Instruction Pointer) register which points to the next instruction. We overwrite this so that it points to the code we want to execute.
+
+
+local variables space: 23
+when we set the number of A's as 23, the buffer overflows and completely overwrites the function's return address
+
+
+
+vi. Once that is done, we find the address of system() and exit() which we will require later for performing the attack
+
+We take the value of /bin/sh using environment variable:
+
+$ export MYSHELL="/bin/sh"
+
+we make a file with the name sh_shell.c
+
+address of /bin/sh: 0xbffff0a7
+
+vii. This is the final step of the attack in which we feed the buffer extra input (memory addresses where the program should go) more than the size of the buffer. The input here are the memory addresses we want the program to go
+
+Forming the exploit string 
+
+Here the thing to note is that we only pass 19 A's and not 23. This is because, the remaining 4 bytes will go into the EIP register where we will put the address where we want the program to go. Also while entering the input, the sequence is as follows:
+We first input A's  then we input the address of system(), followed by exit() and lastly the address of /bin/bash. We input the address in reverse order. For example, the address of system is 0xb7da4da0. We input it as xa0/x4d/xda/xb7 and so on.
